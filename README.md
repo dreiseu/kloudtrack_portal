@@ -25,8 +25,8 @@ A comprehensive ESP32-based web portal for IoT device management, featuring WiFi
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/esp32-portal.git
-   cd esp32-portal
+   git clone https://github.com/dreiseu/kloudtrack_portal.git
+   cd kloudtrack_portal
    ```
 
 2. **Open in PlatformIO**
