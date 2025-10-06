@@ -146,7 +146,7 @@ void handleOtaUpdate() {
   String url;
   if (firmware == "v1.1") url = "https://kloudtrack-firmware-test.s3.ap-southeast-1.amazonaws.com/V2.3.4.bin";
   else if (firmware == "v1.2") url = "http://example.com/firmware/v1.2.bin";
-  else if (firmware == "v2.0") url = "https://kloudtrack-firmware-test.s3.ap-southeast-1.amazonaws.com/V2.3.5.bin";
+  else if (firmware == "v2.0") url = "https://kloudtrack-storage-prod-01.s3.ap-southeast-1.amazonaws.com/firmware/2.4.0/firmware.bin?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIA4OU72QQV5V6GXSMK%2F20251006%2Fap-southeast-1%2Fs3%2Faws4_request&X-Amz-Date=20251006T020519Z&X-Amz-Expires=86400&X-Amz-Signature=032fe246eb2f12d676ca61e20aee53ae634b0d863b79e2c3f393ea04ccf06399&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject";
   else {
     server.send(400, "text/html", basePage("Invalid firmware option."));
     return;
