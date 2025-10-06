@@ -7,8 +7,9 @@
 #include <HTTPClient.h>
 #include <Update.h>
 #include <WiFiClientSecure.h>
+#include <nvs_flash.h>
 
-const char* portal_ssid = "ESP32-Upload";
+const char* portal_ssid = "Kloudtrack Portal";
 const char* portal_password = ""; // Open AP
 
 WebServer server(80);
@@ -33,7 +34,7 @@ String basePage(String statusMsg = "") {
     "<input type=\"submit\" value=\"Save GSM Settings\">"
     "</form>";
     
-  return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><title>ESP32 Portal</title><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body{background:#f4f8fb;font-family:'Segoe UI',Arial,sans-serif;margin:0;padding:0;color:#222}.container{max-width:400px;margin:40px auto;padding:24px;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.08)}h2{margin-top:0;color:#1976d2;font-weight:600;font-size:1.4em}form{margin-bottom:24px}label{display:block;margin-bottom:6px;font-weight:500}input[type='text'],input[type='password'],input[type='file'],select{width:100%;padding:8px 10px;margin-bottom:14px;border:1px solid #cfd8dc;border-radius:6px;font-size:1em;background:#f9fbfc}input[type='submit']{background:#1976d2;color:#fff;border:none;padding:10px 0;width:100%;border-radius:6px;font-size:1em;font-weight:600;cursor:pointer;transition:background 0.2s}input[type='submit']:hover{background:#1565c0}.divider{border-top:1px solid #e0e0e0;margin:24px 0}.status{padding:10px;background:#e3f2fd;color:#1976d2;border-radius:6px;margin-bottom:18px;text-align:center;font-size:0.98em}@media (max-width:500px){.container{margin:10px;padding:12px}}</style></head><body><div class=\"container\"><h2>ESP32 Portal</h2>" + statusDiv + "<form method=\"POST\" action=\"/upload\" enctype=\"multipart/form-data\"><label for=\"cert\">Upload Certificate</label><input type=\"file\" id=\"cert\" name=\"cert\" required><input type=\"submit\" value=\"Upload\"></form><div class=\"divider\"></div><form method=\"POST\" action=\"/wifi\"><label for=\"ssid\">WiFi SSID</label><input type=\"text\" id=\"ssid\" name=\"ssid\" required><label for=\"password\">WiFi Password</label><input type=\"password\" id=\"password\" name=\"password\" required><input type=\"submit\" value=\"Save WiFi\"></form><div class=\"divider\"></div>" + gsmForm + "<div class=\"divider\"></div>" + otaForm + "</div></body></html>";
+  return "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><title>ESP32 Portal</title><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><style>body{background:#f4f8fb;font-family:'Segoe UI',Arial,sans-serif;margin:0;padding:0;color:#222}.container{max-width:400px;margin:40px auto;padding:24px;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.08)}h2{margin-top:0;color:#1976d2;font-weight:600;font-size:1.4em}form{margin-bottom:24px}label{display:block;margin-bottom:6px;font-weight:500}input[type='text'],input[type='password'],input[type='file'],select{width:100%;padding:8px 10px;margin-bottom:14px;border:1px solid #cfd8dc;border-radius:6px;font-size:1em;background:#f9fbfc}input[type='submit']{background:#1976d2;color:#fff;border:none;padding:10px 0;width:100%;border-radius:6px;font-size:1em;font-weight:600;cursor:pointer;transition:background 0.2s}input[type='submit']:hover{background:#1565c0}.divider{border-top:1px solid #e0e0e0;margin:24px 0}.status{padding:10px;background:#e3f2fd;color:#1976d2;border-radius:6px;margin-bottom:18px;text-align:center;font-size:0.98em}@media (max-width:500px){.container{margin:10px;padding:12px}}</style></head><body><div class=\"container\"><h2>ESP32 Portal</h2>" + statusDiv + "<form method=\"POST\" action=\"/upload\" enctype=\"multipart/form-data\"><label for=\"cert\">Upload Device Certificate</label><input type=\"file\" id=\"cert\" name=\"cert\" required><input type=\"submit\" value=\"Upload Certificate\"></form><form method=\"POST\" action=\"/upload-key\" enctype=\"multipart/form-data\"><label for=\"key\">Upload Private Key</label><input type=\"file\" id=\"key\" name=\"key\" required><input type=\"submit\" value=\"Upload Key\"></form><div class=\"divider\"></div><form method=\"POST\" action=\"/wifi\"><label for=\"ssid\">WiFi SSID</label><input type=\"text\" id=\"ssid\" name=\"ssid\" required><label for=\"password\">WiFi Password</label><input type=\"password\" id=\"password\" name=\"password\" required><input type=\"submit\" value=\"Save WiFi\"></form><div class=\"divider\"></div>" + gsmForm + "<div class=\"divider\"></div>" + otaForm + "</div></body></html>";
 }
 
 Preferences preferences;
@@ -49,12 +50,28 @@ void handleFileUpload() {
     if (!SPIFFS.exists("/cert")) {
       SPIFFS.mkdir("/cert");
     }
-    certFile = SPIFFS.open("/cert/ca.pem", FILE_WRITE);
+    certFile = SPIFFS.open("/cert/device.pem", FILE_WRITE);
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     if (certFile) certFile.write(upload.buf, upload.currentSize);
   } else if (upload.status == UPLOAD_FILE_END) {
     if (certFile) certFile.close();
-    server.send(200, "text/html", basePage("Upload successful!"));
+    server.send(200, "text/html", basePage("Device certificate uploaded successfully!"));
+  }
+}
+
+void handleKeyUpload() {
+  HTTPUpload& upload = server.upload();
+  static File keyFile;
+  if (upload.status == UPLOAD_FILE_START) {
+    if (!SPIFFS.exists("/cert")) {
+      SPIFFS.mkdir("/cert");
+    }
+    keyFile = SPIFFS.open("/cert/private.pem", FILE_WRITE);
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (keyFile) keyFile.write(upload.buf, upload.currentSize);
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (keyFile) keyFile.close();
+    server.send(200, "text/html", basePage("Private key uploaded successfully!"));
   }
 }
 
@@ -62,9 +79,9 @@ void handleWifiCredentials() {
   if (server.hasArg("ssid") && server.hasArg("password")) {
     String ssid = server.arg("ssid");
     String password = server.arg("password");
-    preferences.begin("wifi", false);
-    preferences.putString("ssid", ssid);
-    preferences.putString("password", password);
+    preferences.begin("credentials", false);
+    preferences.putString("wifi_ssid", ssid);
+    preferences.putString("wifi_password", password);
     preferences.end();
     server.send(200, "text/html", basePage("WiFi credentials saved!"));
   } else {
@@ -75,11 +92,11 @@ void handleWifiCredentials() {
 void handleGsmCredentials() {
   if (server.hasArg("apn")) {
     String apn = server.arg("apn");
-    
-    preferences.begin("gsm", false);
-    preferences.putString("apn", apn);
+
+    preferences.begin("credentials", false);
+    preferences.putString("gsm_apn", apn);
     preferences.end();
-    
+
     server.send(200, "text/html", basePage("GSM settings saved!"));
   } else {
     server.send(400, "text/html", basePage("Missing APN."));
@@ -92,9 +109,9 @@ void handleOtaUpdate() {
     return;
   }
   // Connect to WiFi using saved credentials
-  preferences.begin("wifi", true);
-  String ssid = preferences.getString("ssid", "");
-  String password = preferences.getString("password", "");
+  preferences.begin("credentials", true);
+  String ssid = preferences.getString("wifi_ssid", "");
+  String password = preferences.getString("wifi_password", "");
   preferences.end();
   if (ssid.length() == 0) {
     server.send(400, "text/html", basePage("No WiFi credentials saved."));
@@ -129,7 +146,7 @@ void handleOtaUpdate() {
   String url;
   if (firmware == "v1.1") url = "https://kloudtrack-firmware-test.s3.ap-southeast-1.amazonaws.com/V2.3.4.bin";
   else if (firmware == "v1.2") url = "http://example.com/firmware/v1.2.bin";
-  else if (firmware == "v2.0") url = "http://example.com/firmware/v2.0.bin";
+  else if (firmware == "v2.0") url = "https://kloudtrack-firmware-test.s3.ap-southeast-1.amazonaws.com/V2.3.5.bin";
   else {
     server.send(400, "text/html", basePage("Invalid firmware option."));
     return;
@@ -137,28 +154,42 @@ void handleOtaUpdate() {
 
   WiFiClientSecure net = WiFiClientSecure();
   
-  // Load and set the certificate for SSL verification
-  if (SPIFFS.exists("/cert/ca.pem")) {
-    File certFile = SPIFFS.open("/cert/ca.pem", FILE_READ);
-    if (certFile) {
+  // Load device certificate and private key for SSL verification
+  bool certExists = SPIFFS.exists("/cert/device.pem");
+  bool keyExists = SPIFFS.exists("/cert/private.pem");
+
+  if (certExists && keyExists) {
+    File certFile = SPIFFS.open("/cert/device.pem", FILE_READ);
+    File keyFile = SPIFFS.open("/cert/private.pem", FILE_READ);
+
+    if (certFile && keyFile) {
       String cert = certFile.readString();
+      String key = keyFile.readString();
       certFile.close();
-      
-      Serial.printf("Certificate file size: %d bytes\n", cert.length());
+      keyFile.close();
+
+      Serial.printf("Device certificate file size: %d bytes\n", cert.length());
+      Serial.printf("Private key file size: %d bytes\n", key.length());
       Serial.println("Certificate starts with: " + cert.substring(0, 50));
-      
-      // For now, let's use insecure connection to get the OTA working
-      // The certificate might be incompatible with ESP32's SSL library
-      Serial.println("Using insecure connection for OTA (certificate compatibility issue)");
+
+      // Set client certificate and private key
+      net.setCertificate(cert.c_str());
+      net.setPrivateKey(key.c_str());
+
+      Serial.println("Using device certificate and private key for SSL authentication");
+
+      // Temporary: bypass certificate validation for testing
       net.setInsecure();
     } else {
-      Serial.println("Failed to read certificate file");
-      server.send(500, "text/html", basePage("Failed to read certificate file."));
+      Serial.println("Failed to read certificate or key files");
+      server.send(500, "text/html", basePage("Failed to read certificate or key files."));
       return;
     }
   } else {
-    Serial.println("No certificate file found, using insecure connection");
-    net.setInsecure(); // Skip certificate verification (not recommended for production)
+    Serial.printf("Certificate files missing - device.pem: %s, private.pem: %s\n",
+                  certExists ? "exists" : "missing", keyExists ? "exists" : "missing");
+    Serial.println("Using insecure connection (certificate files not found)");
+    net.setInsecure(); // Skip certificate verification
   }
   
   HTTPClient http;
@@ -239,54 +270,94 @@ void handleOtaUpdate() {
 
 void setup() {
   Serial.begin(115200);
+
+  // Clear NVS to fix calibration data storage issue
+  Serial.println("Erasing NVS flash...");
+  esp_err_t err = nvs_flash_erase();
+  if (err == ESP_OK) {
+    Serial.println("NVS erased successfully");
+    err = nvs_flash_init();
+    if (err == ESP_OK) {
+      Serial.println("NVS initialized successfully");
+    } else {
+      Serial.printf("NVS init failed: %d\n", err);
+    }
+  } else {
+    Serial.printf("NVS erase failed: %d\n", err);
+  }
+
   if (!SPIFFS.begin(true)) {
     Serial.println("SPIFFS Mount Failed");
     return;
   }
-  // Print saved WiFi credentials
-  preferences.begin("wifi", true);
-  String savedSsid = preferences.getString("ssid", "");
-  String savedPassword = preferences.getString("password", "");
+  // Print saved credentials
+  preferences.begin("credentials", true);
+  String savedSsid = preferences.getString("wifi_ssid", "");
+  String savedPassword = preferences.getString("wifi_password", "");
+  String savedApn = preferences.getString("gsm_apn", "");
   preferences.end();
   Serial.println("Saved WiFi credentials:");
   Serial.print("SSID: ");
   Serial.println(savedSsid);
   Serial.print("Password: ");
   Serial.println(savedPassword);
-  
-  // Print saved GSM credentials
-  preferences.begin("gsm", true);
-  String savedApn = preferences.getString("apn", "");
-  preferences.end();
   Serial.println("Saved GSM credentials:");
   Serial.print("APN: ");
   Serial.println(savedApn);
-  WiFi.softAP(portal_ssid, portal_password);
-  Serial.println("AP IP address: " + WiFi.softAPIP().toString());
+
+  // Disconnect any existing WiFi and set mode to AP
+  WiFi.disconnect(true);
+  delay(100);
+  WiFi.mode(WIFI_AP);
+  delay(100);
+
+  // Start Access Point
+  bool apStarted = WiFi.softAP(portal_ssid, portal_password);
+  if (apStarted) {
+    Serial.println("AP started successfully");
+    Serial.println("AP IP address: " + WiFi.softAPIP().toString());
+    Serial.printf("AP SSID: %s\n", portal_ssid);
+  } else {
+    Serial.println("AP start failed!");
+  }
 
   server.on("/", HTTP_GET, handleRoot);
   server.on("/upload", HTTP_GET, handleRoot);
   server.on("/upload", HTTP_POST, [](){ server.send(200); }, handleFileUpload);
+  server.on("/upload-key", HTTP_POST, [](){ server.send(200); }, handleKeyUpload);
   server.on("/wifi", HTTP_POST, handleWifiCredentials);
   server.on("/gsm", HTTP_POST, handleGsmCredentials);
   server.on("/ota", HTTP_POST, handleOtaUpdate);
   server.begin();
   Serial.println("Web server started");
 
-  // Read and print the certificate file if it exists
-  if (SPIFFS.exists("/cert/ca.pem")) {
-    Serial.println("Certificate file exists!");
-    File certFile = SPIFFS.open("/cert/ca.pem", FILE_READ);
+  // Read and print the certificate files if they exist
+  if (SPIFFS.exists("/cert/device.pem")) {
+    Serial.println("Device certificate file exists!");
+    File certFile = SPIFFS.open("/cert/device.pem", FILE_READ);
     if (certFile) {
-      Serial.print("File size: ");
+      Serial.print("Device certificate file size: ");
       Serial.println(certFile.size());
       String cert = certFile.readString();
-      Serial.println("Certificate contents:");
+      Serial.println("Device certificate contents:");
       Serial.println(cert);
       certFile.close();
     }
   } else {
-    Serial.println("Certificate file does NOT exist!");
+    Serial.println("Device certificate file does NOT exist!");
+  }
+
+  if (SPIFFS.exists("/cert/private.pem")) {
+    Serial.println("Private key file exists!");
+    File keyFile = SPIFFS.open("/cert/private.pem", FILE_READ);
+    if (keyFile) {
+      Serial.print("Private key file size: ");
+      Serial.println(keyFile.size());
+      Serial.println("Private key file loaded (contents not displayed for security)");
+      keyFile.close();
+    }
+  } else {
+    Serial.println("Private key file does NOT exist!");
   }
 }
 
