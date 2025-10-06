@@ -9,7 +9,7 @@
 #include <WiFiClientSecure.h>
 #include <nvs_flash.h>
 
-const char* portal_ssid = "Kloudtrack Portal";
+String portal_ssid = "";
 const char* portal_password = ""; // Open AP
 
 WebServer server(80);
@@ -271,6 +271,14 @@ void handleOtaUpdate() {
 void setup() {
   Serial.begin(115200);
 
+  // Generate portal SSID with MAC address
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  char macStr[13];
+  sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  portal_ssid = "KT-" + String(macStr);
+  Serial.printf("Portal SSID: %s\n", portal_ssid.c_str());
+
   // Clear NVS to fix calibration data storage issue
   Serial.println("Erasing NVS flash...");
   esp_err_t err = nvs_flash_erase();
@@ -312,11 +320,11 @@ void setup() {
   delay(100);
 
   // Start Access Point
-  bool apStarted = WiFi.softAP(portal_ssid, portal_password);
+  bool apStarted = WiFi.softAP(portal_ssid.c_str(), portal_password);
   if (apStarted) {
     Serial.println("AP started successfully");
     Serial.println("AP IP address: " + WiFi.softAPIP().toString());
-    Serial.printf("AP SSID: %s\n", portal_ssid);
+    Serial.printf("AP SSID: %s\n", portal_ssid.c_str());
   } else {
     Serial.println("AP start failed!");
   }
